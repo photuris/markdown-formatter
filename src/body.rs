@@ -370,6 +370,10 @@ fn reflow_unit(
     let (p1, from) = if callout {
         out.push(lines[first].to_owned());
 
+        if first == last {
+            return out;
+        }
+
         (pc.as_str(), first + 1)
     } else {
         (p1, first)
@@ -591,6 +595,12 @@ fn flush_text(text: &mut String, out: &mut Vec<Event<'_>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn should_be_unchanged_when_callout_has_no_body() {
+        assert_eq!(format("> [!note]\n").ok().as_deref(), Some("> [!note]\n"));
+        assert_eq!(format("> [!note]").ok().as_deref(), Some("> [!note]"));
+    }
 
     mod same_structure {
         use super::*;

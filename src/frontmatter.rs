@@ -26,6 +26,13 @@ pub fn format(yaml: &str) -> String {
             continue;
         };
 
+        if let Some(end) = open_quote_end(value, &lines, i) {
+            out.push_str(&lines[i..end].concat());
+            i = end;
+
+            continue;
+        }
+
         let mut end = i + 1;
 
         while end < lines.len() && is_continuation(lines[end]) {
@@ -66,6 +73,46 @@ fn parse_key_line(line: &str) -> Option<(&str, &str)> {
     }
 
     Some((&line[..colon], rest.strip_prefix(' ')?))
+}
+
+/// Returns the exclusive end of an entry whose quoted value is still
+/// open at the end of line `i`, or `None` when the quote closes there or
+/// the value is not quoted. An unclosed quote runs to the end of input.
+fn open_quote_end(value: &str, lines: &[&str], i: usize) -> Option<usize> {
+    let quote = value.chars().next().filter(|c| matches!(c, '"' | '\''))?;
+
+    if quote_closes(quote, &value[1..]) {
+        return None;
+    }
+
+    let closing = lines[i + 1..].iter().position(|l| quote_closes(quote, l));
+
+    Some(closing.map_or(lines.len(), |p| i + 2 + p))
+}
+
+/// Whether `text` contains the quote that closes a `quote` string: a
+/// `"` not preceded by a backslash, or a `'` not followed by another.
+fn quote_closes(quote: char, text: &str) -> bool {
+    let mut chars = text.chars().peekable();
+    let mut prev = ' ';
+
+    while let Some(c) = chars.next() {
+        if c == quote && quote == '"' && prev != '\\' {
+            return true;
+        }
+
+        if c == quote && quote == '\'' {
+            if chars.peek() != Some(&'\'') {
+                return true;
+            }
+
+            chars.next();
+        }
+
+        prev = c;
+    }
+
+    false
 }
 
 /// Whether a line is empty or only whitespace.
@@ -219,4 +266,22 @@ fn fold<'a>(
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod format {
+        use super::*;
+
+        #[test]
+        fn should_keep_entry_verbatim_when_quoted_scalar_spans_lines() {
+            let input = "key: \"first\nx: this is a long line inside a quoted \
+string and should stay byte for byte even when it exceeds the width limit\n\
+last\"\n";
+
+            assert_eq!(format(input), input);
+        }
+    }
 }
