@@ -1,6 +1,7 @@
 //! Folds long top-level YAML scalars in front matter at [`crate::WIDTH`].
 
 use unicode_width::UnicodeWidthStr;
+use yaml_rust2::YamlLoader;
 
 use crate::WIDTH;
 
@@ -12,8 +13,42 @@ const INDICATORS: &str = "\"'[{|>&*!%@`#,";
 /// `yaml` is every line between the fences, each ending in `\n`; the
 /// result has the same shape. Long top-level plain scalars, multi-line
 /// plain scalars, and existing `>` / `>-` blocks are re-folded at
-/// [`WIDTH`]; every other line is copied unchanged.
+/// [`WIDTH`]; every other line is copied unchanged. Input that does not
+/// parse as YAML, or whose folded form would parse to different values,
+/// is returned unchanged.
 pub fn format(yaml: &str) -> String {
+    if let Err(error) = YamlLoader::load_from_str(yaml) {
+        tracing::warn!("front matter left as is: {error}");
+
+        return yaml.to_owned();
+    }
+
+    let out = fold_entries(yaml);
+
+    if !same_values(yaml, &out) {
+        tracing::warn!(
+            "front matter left as is: folding would change a value"
+        );
+
+        return yaml.to_owned();
+    }
+
+    out
+}
+
+/// Whether `before` and `after` both parse and load to equal documents.
+fn same_values(before: &str, after: &str) -> bool {
+    match (
+        YamlLoader::load_from_str(before),
+        YamlLoader::load_from_str(after),
+    ) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// Applies the folding rules line by line, without any safety check.
+fn fold_entries(yaml: &str) -> String {
     let lines: Vec<&str> = yaml.split_inclusive('\n').collect();
     let mut out = String::with_capacity(yaml.len());
     let mut i = 0;
@@ -274,6 +309,14 @@ mod tests {
 
     mod format {
         use super::*;
+
+        #[test]
+        fn should_keep_input_unchanged_when_folding_changes_a_value() {
+            // No input reaches the check through `format` (the rules only
+            // fold values that keep their type), so test the helper.
+            assert!(same_values("k: a b\n", "k: >-\n  a b\n"));
+            assert!(!same_values("k: 12\n", "k: >-\n  12\n"));
+        }
 
         #[test]
         fn should_keep_entry_verbatim_when_quoted_scalar_spans_lines() {
