@@ -1,0 +1,4 @@
+description: >-
+  This plain scalar continues on a second line and keeps going well past the
+  seventy-nine column limit once joined.
+summary: Short plain continuation.

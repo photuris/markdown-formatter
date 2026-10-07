@@ -1,0 +1,12 @@
+name: markdown-style
+description: >-
+  Formatting, line-wrapping, and style conventions for Markdown
+  files (*.md), including Obsidian vault contexts and
+  Obsidian-flavored Markdown. Use whenever writing, editing, or
+  reviewing Markdown files, working inside an Obsidian vault,
+  adding frontmatter or properties, using callouts or wikilinks,
+  or deciding how to structure a Markdown document.
+summary: >
+    Greater-than folding without the strip indicator keeps its indicator and its own four-space indentation when rewrapped.
+short: >-
+  Already folded but short.

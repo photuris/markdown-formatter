@@ -1,0 +1,33 @@
+[package]
+name = "markdown-formatter"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+description = "Re-wraps Markdown prose and YAML front matter at 79 columns."
+
+[[bin]]
+name = "mdfmt"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+pulldown-cmark = { version = "0.13.4", default-features = false }
+thiserror = "2.0.21"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+unicode-width = "0.2.2"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints.rust]
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+expect_used = "deny"
+missing_docs_in_private_items = "warn"
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+unwrap_used = "deny"

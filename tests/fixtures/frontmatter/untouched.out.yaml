@@ -1,0 +1,16 @@
+quoted: "This double-quoted value is very long and goes well past the seventy-nine column limit."
+single: 'Single-quoted values are also left alone even when they are much longer than the limit.'
+literal: |
+  Literal block scalars keep their line breaks exactly as written, even when this line is far too long.
+nested:
+  child: Nested keys are not top-level, so this value stays on one line however long it gets.
+list:
+  - A list item value that is long enough to exceed the seventy-nine column limit easily.
+commented: This value has a trailing comment and is long enough to pass the limit # keep
+spaced: This value has  two spaces inside it and is long enough to pass the seventy-nine limit.
+# A comment line that is long enough to exceed the seventy-nine column limit stays as it is.
+flow: [alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota, kappa, lambda, mu]
+anchor: &ref This anchored value is long enough to pass the seventy-nine column limit easily.
+uneven: >-
+  A folded block whose second line is indented more than the first one
+    stays exactly as written because more-indented lines keep their breaks.

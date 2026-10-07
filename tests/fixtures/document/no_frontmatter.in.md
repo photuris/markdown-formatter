@@ -1,0 +1,1 @@
+This first paragraph is a single very long line that must be wrapped at seventy-nine columns, with words never split, so the output keeps every word intact.
