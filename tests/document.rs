@@ -25,3 +25,10 @@ golden!(
         with_frontmatter,
     ]
 );
+
+#[test]
+fn should_return_error_when_line_endings_are_mixed() {
+    let result = markdown_formatter::format_document("a\r\nb\n");
+
+    assert!(result.is_err(), "got {result:?}");
+}

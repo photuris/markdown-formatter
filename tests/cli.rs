@@ -107,3 +107,20 @@ fn should_exit_2_when_no_path_is_given() {
 
     assert_eq!(out.status.code(), Some(2), "{out:?}");
 }
+
+#[test]
+fn should_leave_file_untouched_and_exit_1_when_reflow_is_unsafe() {
+    let dir = tempfile::tempdir().unwrap();
+    let unsafe_file = dir.path().join("rule.md");
+    let unsafe_text = "Underscores y word word word word word word word \
+word word word word word word _ _ _\n";
+    fs::write(&unsafe_file, unsafe_text).unwrap();
+    let file = dir.path().join("d.md");
+    fs::write(&file, messy()).unwrap();
+
+    let out = mdfmt(&[&unsafe_file, &file]);
+
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(fs::read_to_string(&unsafe_file).unwrap(), unsafe_text);
+    assert_eq!(fs::read_to_string(&file).unwrap(), tidy());
+}
