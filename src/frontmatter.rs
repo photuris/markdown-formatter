@@ -8,6 +8,9 @@ use crate::WIDTH;
 /// Characters that may not start a plain scalar.
 const INDICATORS: &str = "\"'[{|>&*!%@`#,";
 
+/// YAML 1.1 line breaks that `yaml-rust2` reads as scalar content.
+const YAML11_BREAKS: [char; 3] = ['\u{85}', '\u{2028}', '\u{2029}'];
+
 /// Formats the YAML text found between the `---` fences.
 ///
 /// `yaml` is every line between the fences, each ending in `\n`; the
@@ -169,6 +172,7 @@ fn is_plain_safe(s: &str) -> bool {
     !INDICATORS.contains(first)
         && !["- ", "? ", ": "].iter().any(|p| s.starts_with(p))
         && !s.contains('\t')
+        && !s.contains(YAML11_BREAKS)
         && !s.contains("  ")
         && !s.contains(" #")
         && !s.contains(": ")
@@ -221,6 +225,7 @@ fn fold_block(key: &str, indicator: &str, cont: &[&str]) -> Option<String> {
                 && !body.starts_with(' ')
                 && !body.contains("  ")
                 && !l.contains('\t')
+                && !l.contains(YAML11_BREAKS)
                 && !l.ends_with(char::is_whitespace)
         })
     });
@@ -316,6 +321,17 @@ mod tests {
             // fold values that keep their type), so test the helper.
             assert!(same_values("k: a b\n", "k: >-\n  a b\n"));
             assert!(!same_values("k: 12\n", "k: >-\n  12\n"));
+        }
+
+        #[test]
+        fn should_keep_entry_verbatim_when_value_has_yaml11_line_break() {
+            let long = "description: This is a long line of descriptive \
+prose\u{85} with more words that make this value exceed the width limit.\n";
+            let block = "key: >-\n  some words\u{2028} more words here\n  \
+and a few more words\n";
+
+            assert_eq!(format(long), long);
+            assert_eq!(format(block), block);
         }
 
         #[test]
