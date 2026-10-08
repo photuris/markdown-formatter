@@ -132,6 +132,15 @@ fn should_list_file_and_exit_1_without_writing_when_check_finds_changes() {
     fs::write(&messy_file, messy()).unwrap();
     let tidy_file = dir.path().join("tidy.md");
     fs::write(&tidy_file, tidy()).unwrap();
+    let old = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+    for file in [&messy_file, &tidy_file] {
+        fs::File::options()
+            .write(true)
+            .open(file)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+    }
 
     let out = mdfmt(&[Path::new("--check"), &messy_file, &tidy_file]);
 
@@ -141,6 +150,27 @@ fn should_list_file_and_exit_1_without_writing_when_check_finds_changes() {
         format!("{}\n", messy_file.display())
     );
     assert_eq!(fs::read_to_string(&messy_file).unwrap(), messy());
+    for file in [&messy_file, &tidy_file] {
+        assert_eq!(fs::metadata(file).unwrap().modified().unwrap(), old);
+    }
+}
+
+#[test]
+fn should_exit_1_with_empty_stdout_when_check_hits_only_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing.md");
+    let tidy_file = dir.path().join("tidy.md");
+    fs::write(&tidy_file, tidy()).unwrap();
+
+    let out = mdfmt(&[Path::new("--check"), &missing, &tidy_file]);
+
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(out.stdout.is_empty(), "stdout: {:?}", out.stdout);
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("missing.md"),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
