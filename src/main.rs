@@ -3,7 +3,7 @@
 use std::{path::PathBuf, process::ExitCode};
 
 use clap::Parser;
-use markdown_formatter::{Outcome, format_file};
+use markdown_formatter::{Mode, Outcome, format_file};
 use tracing_subscriber::EnvFilter;
 
 /// Command-line arguments.
@@ -13,6 +13,10 @@ struct Args {
     /// Markdown files to re-wrap in place.
     #[arg(required = true)]
     paths: Vec<PathBuf>,
+    /// Report files that would change instead of writing them;
+    /// exit 1 if any would.
+    #[arg(long)]
+    check: bool,
 }
 
 fn main() -> ExitCode {
@@ -27,10 +31,15 @@ fn main() -> ExitCode {
         )
         .init();
 
+    let mode = if args.check { Mode::Check } else { Mode::Write };
     let mut failed = false;
 
     for path in &args.paths {
-        match format_file(path) {
+        match format_file(path, mode) {
+            Ok(Outcome::NeedsFormatting) => {
+                println!("{}", path.display());
+                failed = true;
+            }
             Ok(Outcome::SkippedVault) => tracing::warn!(
                 path = %path.display(),
                 "skipped: inside an Obsidian vault"
