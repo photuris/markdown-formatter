@@ -124,3 +124,54 @@ word word word word word word _ _ _\n";
     assert_eq!(fs::read_to_string(&unsafe_file).unwrap(), unsafe_text);
     assert_eq!(fs::read_to_string(&file).unwrap(), tidy());
 }
+
+#[test]
+fn should_list_file_and_exit_1_without_writing_when_check_finds_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let messy_file = dir.path().join("messy.md");
+    fs::write(&messy_file, messy()).unwrap();
+    let tidy_file = dir.path().join("tidy.md");
+    fs::write(&tidy_file, tidy()).unwrap();
+
+    let out = mdfmt(&[Path::new("--check"), &messy_file, &tidy_file]);
+
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        format!("{}\n", messy_file.display())
+    );
+    assert_eq!(fs::read_to_string(&messy_file).unwrap(), messy());
+}
+
+#[test]
+fn should_exit_0_and_print_nothing_when_check_finds_no_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("tidy.md");
+    fs::write(&file, tidy()).unwrap();
+
+    let out = mdfmt(&[Path::new("--check"), &file]);
+
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty(), "stdout: {:?}", out.stdout);
+}
+
+#[test]
+fn should_exit_1_and_still_report_other_files_when_check_hits_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing.md");
+    let messy_file = dir.path().join("messy.md");
+    fs::write(&messy_file, messy()).unwrap();
+
+    let out = mdfmt(&[Path::new("--check"), &missing, &messy_file]);
+
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        format!("{}\n", messy_file.display())
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("missing.md"),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
