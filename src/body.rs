@@ -60,7 +60,7 @@ enum Owner {
 enum Kind {
     /// Ordinary inline content.
     Plain,
-    /// Code, inline math, inline HTML, or a wikilink: never split.
+    /// Code, inline math, inline HTML, a wikilink, or an image: never split.
     Atomic,
     /// Display math: the whole unit is kept verbatim.
     DisplayMath,
@@ -188,7 +188,8 @@ fn start_kind(tag: &Tag) -> Kind {
         Tag::Link {
             link_type: LinkType::WikiLink { .. },
             ..
-        } => Kind::Atomic,
+        }
+        | Tag::Image { .. } => Kind::Atomic,
         _ => Kind::Plain,
     }
 }
