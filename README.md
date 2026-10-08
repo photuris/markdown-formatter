@@ -3,6 +3,10 @@
 `mdfmt` re-wraps Markdown files in place at 79 columns, following the
 `markdown-style` skill.
 
+Prebuilt binaries for Linux, macOS, and Windows are attached to each [GitHub
+release](https://github.com/photuris/markdown-formatter/releases). To build
+from source:
+
 ```sh
 cargo install --path .
 mdfmt README.md docs/*.md
