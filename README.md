@@ -75,3 +75,7 @@ cargo test --locked
 
 Golden fixtures live in `tests/fixtures/<group>/<name>.{in,out}.<ext>`.
 Every `.in` must format to its `.out`, and every `.out` to itself.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
