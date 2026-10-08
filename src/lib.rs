@@ -35,6 +35,18 @@ pub enum Outcome {
     Rewritten,
     /// The file is inside an Obsidian vault and was not read.
     SkippedVault,
+    /// The file would change but was not written (check mode).
+    NeedsFormatting,
+}
+
+/// What [`format_file`] does with a file whose formatted text differs
+/// from its contents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// Write the formatted text back to the file.
+    Write,
+    /// Leave the file alone and report that it needs formatting.
+    Check,
 }
 
 /// Why a file could not be formatted.
@@ -136,19 +148,21 @@ pub fn in_obsidian_vault(path: &Path) -> bool {
         .any(|dir| dir.join(".obsidian").is_dir())
 }
 
-/// Formats the file at `path` in place.
+/// Formats the file at `path`, in place or as a dry run per `mode`.
 ///
-/// Files inside an Obsidian vault are skipped without being read. The
-/// file is written only when the formatted text differs from its
-/// contents. A failure during the write itself may leave the file partly
-/// written.
+/// Files inside an Obsidian vault are skipped without being read. When
+/// the formatted text equals the contents, the result is
+/// [`Outcome::Unchanged`] in both modes. Otherwise [`Mode::Write`] writes
+/// the file and returns [`Outcome::Rewritten`], while [`Mode::Check`]
+/// leaves it untouched and returns [`Outcome::NeedsFormatting`]. A
+/// failure during the write itself may leave the file partly written.
 ///
 /// # Errors
 ///
 /// Returns [`FileError::Io`] when the file cannot be read or written, and
 /// [`FileError::Format`] when its contents cannot be formatted. Neither
 /// read nor format errors modify the file.
-pub fn format_file(path: &Path) -> Result<Outcome, FileError> {
+pub fn format_file(path: &Path, mode: Mode) -> Result<Outcome, FileError> {
     if in_obsidian_vault(path) {
         return Ok(Outcome::SkippedVault);
     }
@@ -166,6 +180,10 @@ pub fn format_file(path: &Path) -> Result<Outcome, FileError> {
 
     if output == input {
         return Ok(Outcome::Unchanged);
+    }
+
+    if mode == Mode::Check {
+        return Ok(Outcome::NeedsFormatting);
     }
 
     fs::write(path, output).map_err(io_err)?;
