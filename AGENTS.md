@@ -1,9 +1,10 @@
 # markdown-formatter
 
-`mdfmt` re-wraps Markdown files at 79 columns: paragraph prose is reflowed,
-everything else (code, tables, headings, HTML, math) is kept byte for byte, and
-long top-level YAML front-matter scalars are folded with `>-`. Files inside an
-Obsidian vault (an ancestor holds `.obsidian/`) are skipped.
+`mdfmt` re-wraps Markdown files at 79 columns (or, with `--unwrap`, puts each
+paragraph on one line): paragraph prose is reflowed, everything else (code,
+tables, headings, HTML, math) is kept byte for byte, and long top-level YAML
+front-matter scalars are folded with `>-`. Files inside an Obsidian vault (an
+ancestor holds `.obsidian/`) are skipped.
 
 ## Layout
 

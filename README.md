@@ -1,7 +1,8 @@
 # markdown-formatter
 
 `mdfmt` re-wraps Markdown files in place at 79 columns, following the
-`markdown-style` skill.
+`markdown-style` skill. With `--unwrap` it does the opposite and puts each
+paragraph on one line.
 
 Prebuilt binaries for Linux, macOS, and Windows are attached to each [GitHub
 release](https://github.com/photuris/markdown-formatter/releases). To build
@@ -11,6 +12,7 @@ from source:
 cargo install --path .
 mdfmt README.md docs/*.md
 mdfmt --check README.md docs/*.md   # list files that would change
+mdfmt --unwrap notes.md             # one paragraph per line
 ```
 
 ## What it changes
@@ -23,6 +25,15 @@ mdfmt --check README.md docs/*.md   # list files that would change
   `>-` block with a 2-space indent. Existing `>-` and `>` blocks are re-wrapped
   to 79, and a plain value that spans lines is joined (or folded if it is still
   too long).
+
+## Unwrap mode
+
+`--unwrap` is the same reflow with no width limit. Each paragraph, list item,
+quote, and footnote becomes one line, with its markers and indent kept. A hard
+line break still starts a new line. In front matter, a plain value that spans
+lines is joined, and `>-` and `>` blocks keep their indicator but collapse to
+one indented line. Everything listed under "What it never changes" still
+applies, and so does the vault skip. `--unwrap` combines with `--check`.
 
 ## What it never changes
 
@@ -41,10 +52,14 @@ mdfmt --check README.md docs/*.md   # list files that would change
 ## Safety
 
 After reflowing, `mdfmt` parses the result again and compares it with the
-original. If the document structure differs (for example, a wrap would turn
-`_ _ _` into a horizontal rule), it reports an error and leaves the file
-untouched. Files with mixed CRLF and LF line endings are refused the same way.
-A file is written only when its content changes.
+original, once with the extensions it supports (tables, footnotes, math,
+wikilinks) and once as plain CommonMark. Code block text and link reference
+definitions must match exactly; prose may differ only in where lines break. If
+anything else differs (for example, a wrap would turn `_ _ _` into a horizontal
+rule), it reports an error and leaves the file untouched. The check covers the
+Markdown body; front matter is checked as YAML instead. Files with mixed CRLF
+and LF line endings are refused the same way. A file is written only when its
+content changes.
 
 With `--check`, nothing is written: each file that would change is printed to
 stdout, one path per line, and the exit code is 1 if any would. This is the
