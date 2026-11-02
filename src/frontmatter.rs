@@ -1,9 +1,7 @@
-//! Folds long top-level YAML scalars in front matter at [`crate::WIDTH`].
+//! Folds long top-level YAML scalars in front matter to a given width.
 
 use unicode_width::UnicodeWidthStr;
 use yaml_rust2::YamlLoader;
-
-use crate::WIDTH;
 
 /// Characters that may not start a plain scalar.
 const INDICATORS: &str = "\"'[{|>&*!%@`#,";
@@ -16,17 +14,17 @@ const YAML11_BREAKS: [char; 3] = ['\u{85}', '\u{2028}', '\u{2029}'];
 /// `yaml` is every line between the fences, each ending in `\n`; the
 /// result has the same shape. Long top-level plain scalars, multi-line
 /// plain scalars, and existing `>` / `>-` blocks are re-folded at
-/// [`WIDTH`]; every other line is copied unchanged. Input that does not
+/// `width` columns; every other line is copied unchanged. Input that does not
 /// parse as YAML, or whose folded form would parse to different values,
 /// is returned unchanged.
-pub fn format(yaml: &str) -> String {
+pub fn format(yaml: &str, width: usize) -> String {
     if let Err(error) = YamlLoader::load_from_str(yaml) {
         tracing::warn!("front matter left as is: {error}");
 
         return yaml.to_owned();
     }
 
-    let out = fold_entries(yaml);
+    let out = fold_entries(yaml, width);
 
     if !same_values(yaml, &out) {
         tracing::warn!(
@@ -51,7 +49,7 @@ fn same_values(before: &str, after: &str) -> bool {
 }
 
 /// Applies the folding rules line by line, without any safety check.
-fn fold_entries(yaml: &str) -> String {
+fn fold_entries(yaml: &str, width: usize) -> String {
     let lines: Vec<&str> = yaml.split_inclusive('\n').collect();
     let mut out = String::with_capacity(yaml.len());
     let mut i = 0;
@@ -81,7 +79,7 @@ fn fold_entries(yaml: &str) -> String {
             end -= 1;
         }
 
-        match format_entry(key, value, &lines[i + 1..end]) {
+        match format_entry(key, value, &lines[i + 1..end], width) {
             Some(text) => out.push_str(&text),
             None => out.push_str(&lines[i..end].concat()),
         }
@@ -188,26 +186,36 @@ fn is_string_safe(s: &str) -> bool {
 }
 
 /// Rewrites one entry, or returns `None` to keep it verbatim.
-fn format_entry(key: &str, value: &str, cont: &[&str]) -> Option<String> {
+fn format_entry(
+    key: &str,
+    value: &str,
+    cont: &[&str],
+    width: usize,
+) -> Option<String> {
     if cont.is_empty() {
-        let width = key.width() + 2 + value.width();
+        let flat = key.width() + 2 + value.width();
 
-        if !is_string_safe(value) || width <= WIDTH {
+        if !is_string_safe(value) || flat <= width {
             return None;
         }
 
-        return Some(fold(key, ">-", value.split(' '), "  "));
+        return Some(fold(key, ">-", value.split(' '), "  ", width));
     }
 
     if value == ">-" || value == ">" {
-        return fold_block(key, value, cont);
+        return fold_block(key, value, cont, width);
     }
 
-    join_plain(key, value, cont)
+    join_plain(key, value, cont, width)
 }
 
 /// Case B: re-folds an existing `>` or `>-` block with even indent.
-fn fold_block(key: &str, indicator: &str, cont: &[&str]) -> Option<String> {
+fn fold_block(
+    key: &str,
+    indicator: &str,
+    cont: &[&str],
+    width: usize,
+) -> Option<String> {
     let lines: Vec<&str> = cont
         .iter()
         .map(|l| l.strip_suffix('\n').unwrap_or(l))
@@ -239,11 +247,16 @@ fn fold_block(key: &str, indicator: &str, cont: &[&str]) -> Option<String> {
         .flat_map(|l| l.split(' '))
         .filter(|w| !w.is_empty());
 
-    Some(fold(key, indicator, words, &indent))
+    Some(fold(key, indicator, words, &indent, width))
 }
 
 /// Case C: joins a multi-line plain scalar onto one line or folds it.
-fn join_plain(key: &str, value: &str, cont: &[&str]) -> Option<String> {
+fn join_plain(
+    key: &str,
+    value: &str,
+    cont: &[&str],
+    width: usize,
+) -> Option<String> {
     if !is_plain_safe(value) {
         return None;
     }
@@ -269,19 +282,21 @@ fn join_plain(key: &str, value: &str, cont: &[&str]) -> Option<String> {
         return None;
     }
 
-    if key.width() + 2 + joined.width() <= WIDTH {
+    if key.width() + 2 + joined.width() <= width {
         return Some(format!("{key}: {joined}\n"));
     }
 
-    Some(fold(key, ">-", joined.split(' '), "  "))
+    Some(fold(key, ">-", joined.split(' '), "  ", width))
 }
 
-/// Greedy-fills `words` under `key: indicator`, one `indent` per line.
+/// Greedy-fills `words` under `key: indicator`, one `indent` per line, at
+/// most `width` columns wide.
 fn fold<'a>(
     key: &str,
     indicator: &str,
     words: impl Iterator<Item = &'a str>,
     indent: &str,
+    width: usize,
 ) -> String {
     let mut out = format!("{key}: {indicator}\n");
     let mut line = String::new();
@@ -290,7 +305,7 @@ fn fold<'a>(
         if line.is_empty() {
             line.push_str(indent);
             line.push_str(word);
-        } else if line.width() + 1 + word.width() <= WIDTH {
+        } else if line.width() + 1 + word.width() <= width {
             line.push(' ');
             line.push_str(word);
         } else {
@@ -314,6 +329,7 @@ mod tests {
 
     mod format {
         use super::*;
+        use crate::WIDTH;
 
         #[test]
         fn should_keep_input_unchanged_when_folding_changes_a_value() {
@@ -330,8 +346,8 @@ prose\u{85} with more words that make this value exceed the width limit.\n";
             let block = "key: >-\n  some words\u{2028} more words here\n  \
 and a few more words\n";
 
-            assert_eq!(format(long), long);
-            assert_eq!(format(block), block);
+            assert_eq!(format(long, WIDTH), long);
+            assert_eq!(format(block, WIDTH), block);
         }
 
         #[test]
@@ -340,7 +356,7 @@ and a few more words\n";
 string and should stay byte for byte even when it exceeds the width limit\n\
 last\"\n";
 
-            assert_eq!(format(input), input);
+            assert_eq!(format(input, WIDTH), input);
         }
     }
 }

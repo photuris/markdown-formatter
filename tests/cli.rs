@@ -205,3 +205,57 @@ fn should_exit_1_and_still_report_other_files_when_check_hits_an_error() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+#[test]
+fn should_unwrap_file_in_place_when_unwrap_flag_given() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("a.md");
+    fs::write(&file, common::fixture("unwrap", "frontmatter", "in", "md"))
+        .unwrap();
+
+    let out = mdfmt(&[Path::new("--unwrap"), &file]);
+
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty(), "stdout: {:?}", out.stdout);
+    assert_eq!(
+        fs::read_to_string(&file).unwrap(),
+        common::fixture("unwrap", "frontmatter", "out", "md")
+    );
+}
+
+#[test]
+fn should_report_without_writing_when_unwrap_and_check_given() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("a.md");
+    let input = common::fixture("unwrap", "frontmatter", "in", "md");
+    fs::write(&file, &input).unwrap();
+
+    let out = mdfmt(&[Path::new("--unwrap"), Path::new("--check"), &file]);
+
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        format!("{}\n", file.display())
+    );
+    assert_eq!(fs::read(&file).unwrap(), input.as_bytes());
+}
+
+#[test]
+fn should_skip_vault_file_when_unwrap_flag_given() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir(dir.path().join(".obsidian")).unwrap();
+    fs::create_dir(dir.path().join("notes")).unwrap();
+    let file = dir.path().join("notes").join("a.md");
+    let input = common::fixture("unwrap", "frontmatter", "in", "md");
+    fs::write(&file, &input).unwrap();
+
+    let out = mdfmt(&[Path::new("--unwrap"), &file]);
+
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(fs::read(&file).unwrap(), input.as_bytes());
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("skipped"),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

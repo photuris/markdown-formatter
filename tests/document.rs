@@ -6,9 +6,11 @@
 
 mod common;
 
+use markdown_formatter::Wrap;
+
 /// Formats a whole document, failing the test on a reflow error.
 fn format(input: &str) -> String {
-    markdown_formatter::format_document(input)
+    markdown_formatter::format_document(input, Wrap::Fill)
         .expect("format_document returned an error")
 }
 
@@ -28,7 +30,7 @@ golden!(
 
 #[test]
 fn should_return_error_when_line_endings_are_mixed() {
-    let result = markdown_formatter::format_document("a\r\nb\n");
+    let result = markdown_formatter::format_document("a\r\nb\n", Wrap::Fill);
 
     assert!(result.is_err(), "got {result:?}");
 }

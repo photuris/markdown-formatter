@@ -1,11 +1,9 @@
-//! Reflows Markdown paragraph text at [`crate::WIDTH`] columns.
+//! Reflows Markdown paragraph text to a given width.
 
 use std::{collections::HashSet, ops::Range};
 
 use pulldown_cmark::{Event, LinkType, Options, Parser, Tag, TagEnd};
 use unicode_width::UnicodeWidthStr;
-
-use crate::WIDTH;
 
 /// The parser options used for every parse in this file.
 const OPTS: Options = Options::ENABLE_TABLES
@@ -25,15 +23,15 @@ pub enum BodyError {
 
 /// Reflows the paragraph text of a Markdown body.
 ///
-/// Paragraph and tight-list-item prose is refilled at [`WIDTH`] columns;
+/// Paragraph and tight-list-item prose is refilled at `width` columns;
 /// every other line is copied byte for byte.
 ///
 /// # Errors
 ///
 /// Returns [`BodyError::StructureChanged`] when the reflowed text would
 /// parse differently from `body`.
-pub fn format(body: &str) -> Result<String, BodyError> {
-    let output = reflow(body);
+pub fn format(body: &str, width: usize) -> Result<String, BodyError> {
+    let output = reflow(body, width);
 
     if same_structure(body, &output) {
         Ok(output)
@@ -268,7 +266,7 @@ struct Segment<'a> {
 }
 
 /// Reflows the whole body, line by line.
-fn reflow(body: &str) -> String {
+fn reflow(body: &str, width: usize) -> String {
     let scan = scan(body);
     let lines: Vec<&str> = body.split('\n').collect();
     let mut out: Vec<String> = Vec::with_capacity(lines.len());
@@ -287,7 +285,7 @@ fn reflow(body: &str) -> String {
             last += 1;
         }
 
-        out.extend(reflow_unit(&scan, body, &lines, id, i..=last));
+        out.extend(reflow_unit(&scan, body, &lines, id, i..=last, width));
         i = last + 1;
     }
 
@@ -335,6 +333,7 @@ fn reflow_unit(
     lines: &[&str],
     id: usize,
     unit: std::ops::RangeInclusive<usize>,
+    width: usize,
 ) -> Vec<String> {
     let (first, last) = (*unit.start(), *unit.end());
     let span = first..last + 1;
@@ -393,7 +392,7 @@ fn reflow_unit(
         .map(|l| row(scan, lines, l, (first, c), breaks.contains(&l)))
         .collect();
 
-    out.extend(fill(&segments(&rows, &atomic), p1, &pc));
+    out.extend(fill(&segments(&rows, &atomic), p1, &pc, width));
 
     out
 }
@@ -477,8 +476,14 @@ fn tokens<'a>(row: &Row<'a>, atomic: &[Range<usize>]) -> Vec<&'a str> {
     out
 }
 
-/// Fills segments greedily into lines starting with `p1` / `pc`.
-fn fill(segments: &[Segment], p1: &str, pc: &str) -> Vec<String> {
+/// Fills segments greedily into lines of at most `width` columns, starting
+/// with `p1` / `pc`.
+fn fill(
+    segments: &[Segment],
+    p1: &str,
+    pc: &str,
+    width: usize,
+) -> Vec<String> {
     let mut out = Vec::new();
 
     for (n, segment) in segments.iter().enumerate() {
@@ -489,7 +494,7 @@ fn fill(segments: &[Segment], p1: &str, pc: &str) -> Vec<String> {
             if !placed {
                 line.push_str(token);
                 placed = true;
-            } else if line.width() + 1 + token.width() <= WIDTH
+            } else if line.width() + 1 + token.width() <= width
                 || block_starting(token)
             {
                 line.push(' ');
@@ -543,18 +548,20 @@ fn is_footnote_label(token: &str) -> bool {
 // ── Structure check ─────────────────────────────────────────────────────────
 
 /// Returns whether `a` and `b` parse to the same document, ignoring where
-/// text wraps.
+/// text wraps, both with this file's extensions and as plain CommonMark.
 fn same_structure(a: &str, b: &str) -> bool {
-    normalized(a) == normalized(b)
+    [OPTS, Options::empty()]
+        .into_iter()
+        .all(|opts| normalized(a, opts) == normalized(b, opts))
 }
 
-/// Parses `src`, turning soft breaks into spaces and merging adjacent
-/// text events with whitespace runs collapsed.
-fn normalized(src: &str) -> Vec<Event<'_>> {
+/// Parses `src` with `opts`, turning soft breaks into spaces and merging
+/// adjacent text events with whitespace runs collapsed.
+fn normalized(src: &str, opts: Options) -> Vec<Event<'_>> {
     let mut out = Vec::new();
     let mut text = String::new();
 
-    for event in Parser::new_ext(src, OPTS) {
+    for event in Parser::new_ext(src, opts) {
         match event {
             Event::Text(t) => text.push_str(&t),
             Event::SoftBreak => text.push(' '),
@@ -596,11 +603,18 @@ fn flush_text(text: &mut String, out: &mut Vec<Event<'_>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::WIDTH;
 
     #[test]
     fn should_be_unchanged_when_callout_has_no_body() {
-        assert_eq!(format("> [!note]\n").ok().as_deref(), Some("> [!note]\n"));
-        assert_eq!(format("> [!note]").ok().as_deref(), Some("> [!note]"));
+        assert_eq!(
+            format("> [!note]\n", WIDTH).ok().as_deref(),
+            Some("> [!note]\n")
+        );
+        assert_eq!(
+            format("> [!note]", WIDTH).ok().as_deref(),
+            Some("> [!note]")
+        );
     }
 
     mod same_structure {

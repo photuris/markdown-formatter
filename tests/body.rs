@@ -6,11 +6,11 @@
 
 mod common;
 
-use markdown_formatter::body;
+use markdown_formatter::{WIDTH, body};
 
 /// Formats a body, failing the test on a reflow error.
 fn format(input: &str) -> String {
-    body::format(input).expect("body::format returned an error")
+    body::format(input, WIDTH).expect("body::format returned an error")
 }
 
 golden!(
@@ -36,7 +36,7 @@ word word word word word word _ _ _\n";
 
 #[test]
 fn should_return_structure_changed_when_reflow_creates_thematic_break() {
-    let result = body::format(MAKES_RULE);
+    let result = body::format(MAKES_RULE, WIDTH);
 
     assert!(
         matches!(result, Err(body::BodyError::StructureChanged)),
@@ -48,7 +48,7 @@ fn should_return_structure_changed_when_reflow_creates_thematic_break() {
 fn should_keep_nonbreaking_space_when_reflowing() {
     let input = format!("{}10\u{a0}kg together.\n", "word ".repeat(15));
 
-    let output = body::format(&input).expect("format");
+    let output = body::format(&input, WIDTH).expect("format");
 
     assert!(output.contains("10\u{a0}kg"), "got {output:?}");
 }
@@ -57,7 +57,7 @@ fn should_keep_nonbreaking_space_when_reflowing() {
 fn should_keep_inline_html_attribute_spacing_when_reflowing() {
     let input = format!("{}<a href=\"a  b\">go</a>.\n", "word ".repeat(14));
 
-    let output = body::format(&input).expect("format");
+    let output = body::format(&input, WIDTH).expect("format");
 
     assert!(output.contains("<a href=\"a  b\">"), "got {output:?}");
 }

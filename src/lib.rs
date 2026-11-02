@@ -15,6 +15,25 @@ pub mod frontmatter;
 /// Maximum display width of a formatted line, in columns.
 pub const WIDTH: usize = 79;
 
+/// How prose is laid out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Wrap {
+    /// Fill prose to [`WIDTH`] columns.
+    Fill,
+    /// Put each paragraph, and each hard-break segment, on one line.
+    Unwrap,
+}
+
+impl Wrap {
+    /// The maximum line width in columns for this layout.
+    pub const fn width(self) -> usize {
+        match self {
+            Self::Fill => WIDTH,
+            Self::Unwrap => usize::MAX,
+        }
+    }
+}
+
 /// Why a document could not be formatted.
 #[derive(Debug, thiserror::Error)]
 pub enum DocumentError {
@@ -73,14 +92,18 @@ pub enum FileError {
 /// Formats a whole Markdown document: front matter, then body.
 ///
 /// Line endings are normalised to LF for formatting and restored to CRLF
-/// afterwards when the input used CRLF.
+/// afterwards when the input used CRLF. `wrap` picks between filling
+/// prose to [`WIDTH`] columns and putting each paragraph on one line.
 ///
 /// # Errors
 ///
 /// Returns [`DocumentError::MixedLineEndings`] when CRLF and bare LF are
 /// mixed, and [`DocumentError::Body`] when the body cannot be reflowed
 /// safely.
-pub fn format_document(input: &str) -> Result<String, DocumentError> {
+pub fn format_document(
+    input: &str,
+    wrap: Wrap,
+) -> Result<String, DocumentError> {
     let crlf = input.contains("\r\n");
 
     if crlf && has_bare_lf(input) {
@@ -88,14 +111,15 @@ pub fn format_document(input: &str) -> Result<String, DocumentError> {
     }
 
     let text = input.replace("\r\n", "\n");
+    let width = wrap.width();
 
     let output = match split_front_matter(&text) {
         Some((yaml, closing, rest)) => format!(
             "---\n{}{closing}{}",
-            frontmatter::format(yaml),
-            body::format(rest)?
+            frontmatter::format(yaml, width),
+            body::format(rest, width)?
         ),
-        None => body::format(&text)?,
+        None => body::format(&text, width)?,
     };
 
     if crlf {
@@ -148,7 +172,8 @@ pub fn in_obsidian_vault(path: &Path) -> bool {
         .any(|dir| dir.join(".obsidian").is_dir())
 }
 
-/// Formats the file at `path`, in place or as a dry run per `mode`.
+/// Formats the file at `path`, in place or as a dry run per `mode`, with
+/// the layout `wrap`.
 ///
 /// Files inside an Obsidian vault are skipped without being read. When
 /// the formatted text equals the contents, the result is
@@ -162,7 +187,11 @@ pub fn in_obsidian_vault(path: &Path) -> bool {
 /// Returns [`FileError::Io`] when the file cannot be read or written, and
 /// [`FileError::Format`] when its contents cannot be formatted. Neither
 /// read nor format errors modify the file.
-pub fn format_file(path: &Path, mode: Mode) -> Result<Outcome, FileError> {
+pub fn format_file(
+    path: &Path,
+    mode: Mode,
+    wrap: Wrap,
+) -> Result<Outcome, FileError> {
     if in_obsidian_vault(path) {
         return Ok(Outcome::SkippedVault);
     }
@@ -173,7 +202,7 @@ pub fn format_file(path: &Path, mode: Mode) -> Result<Outcome, FileError> {
     };
     let input = fs::read_to_string(path).map_err(io_err)?;
     let output =
-        format_document(&input).map_err(|source| FileError::Format {
+        format_document(&input, wrap).map_err(|source| FileError::Format {
             path: path.to_owned(),
             source,
         })?;
