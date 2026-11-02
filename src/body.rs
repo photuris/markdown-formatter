@@ -547,26 +547,63 @@ fn is_footnote_label(token: &str) -> bool {
 
 // ── Structure check ─────────────────────────────────────────────────────────
 
+/// A link reference definition: label, destination, and title.
+type RefDef = (String, String, Option<String>);
+
 /// Returns whether `a` and `b` parse to the same document, ignoring where
-/// text wraps, both with this file's extensions and as plain CommonMark.
+/// prose wraps, both with this file's extensions and as plain CommonMark.
+///
+/// Code block text and reference definitions are compared literally.
 fn same_structure(a: &str, b: &str) -> bool {
     [OPTS, Options::empty()]
         .into_iter()
         .all(|opts| normalized(a, opts) == normalized(b, opts))
 }
 
+/// Collects the reference definitions of `parser`, sorted. They emit no
+/// events, so the event stream alone cannot show that one changed.
+fn ref_defs(parser: &Parser) -> Vec<RefDef> {
+    let mut defs: Vec<RefDef> = parser
+        .reference_definitions()
+        .iter()
+        .map(|(label, def)| {
+            (
+                label.to_owned(),
+                def.dest.to_string(),
+                def.title.as_ref().map(ToString::to_string),
+            )
+        })
+        .collect();
+
+    defs.sort();
+
+    defs
+}
+
 /// Parses `src` with `opts`, turning soft breaks into spaces and merging
-/// adjacent text events with whitespace runs collapsed.
-fn normalized(src: &str, opts: Options) -> Vec<Event<'_>> {
+/// adjacent prose text events with whitespace runs collapsed. Text inside
+/// code blocks is kept as is. Also returns the reference definitions.
+fn normalized(src: &str, opts: Options) -> (Vec<Event<'_>>, Vec<RefDef>) {
+    let parser = Parser::new_ext(src, opts);
+    let defs = ref_defs(&parser);
     let mut out = Vec::new();
     let mut text = String::new();
+    let mut in_code = false;
 
-    for event in Parser::new_ext(src, opts) {
+    for event in parser {
         match event {
+            Event::Text(t) if in_code => out.push(Event::Text(t)),
             Event::Text(t) => text.push_str(&t),
             Event::SoftBreak => text.push(' '),
             other => {
                 flush_text(&mut text, &mut out);
+
+                match other {
+                    Event::Start(Tag::CodeBlock(_)) => in_code = true,
+                    Event::End(TagEnd::CodeBlock) => in_code = false,
+                    _ => {}
+                }
+
                 out.push(other);
             }
         }
@@ -574,7 +611,7 @@ fn normalized(src: &str, opts: Options) -> Vec<Event<'_>> {
 
     flush_text(&mut text, &mut out);
 
-    out
+    (out, defs)
 }
 
 /// Moves pending text into `out` as one event with collapsed whitespace.

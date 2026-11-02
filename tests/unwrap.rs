@@ -125,3 +125,37 @@ fn should_refuse_unwrap_that_changes_commonmark_structure() {
         "got {result:?}"
     );
 }
+
+/// Under plain CommonMark the indented lines are a code block whose text
+/// must not change, even though the extension set reads them as prose.
+#[test]
+fn should_refuse_unwrap_that_changes_commonmark_code_block() {
+    let input = "[^a]: note\n\n    alpha\n    beta\n";
+
+    let result = markdown_formatter::body::format(input, usize::MAX);
+
+    assert!(
+        matches!(
+            result,
+            Err(markdown_formatter::body::BodyError::StructureChanged)
+        ),
+        "got {result:?}"
+    );
+}
+
+/// Under plain CommonMark this is a link reference definition whose
+/// title holds a newline; joining the lines would change the title.
+#[test]
+fn should_refuse_unwrap_that_changes_reference_definition() {
+    let input = "[^a]: http://example.com\n    \"alpha\n    beta\"\n";
+
+    let result = markdown_formatter::body::format(input, usize::MAX);
+
+    assert!(
+        matches!(
+            result,
+            Err(markdown_formatter::body::BodyError::StructureChanged)
+        ),
+        "got {result:?}"
+    );
+}
